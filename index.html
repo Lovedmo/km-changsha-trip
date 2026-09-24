@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>长沙三日游 · 地铁为主</title>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+<script src="vendor/leaflet/leaflet.js"></script>
+<style>
+  :root { --bg:#f6f4ef; --card:#fff; --ink:#1c1b19; --muted:#6b675f; --line:#e8e2d6; --accent:#0f766e; --d1:#2563eb; --d2:#dc2626; --d3:#16a34a; --shadow:0 10px 30px rgba(28,27,25,.08); }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif; color:var(--ink); background:var(--bg); line-height:1.55; }
+  a { color:var(--accent); text-decoration:none; }
+  .wrap { max-width:980px; margin:0 auto; padding:28px 18px 64px; }
+  header.hero { padding:28px; border-radius:28px; color:#fff; background:linear-gradient(135deg,#0f766e,#115e59 45%,#7c2d12 140%); box-shadow:var(--shadow); }
+  .hero h1 { margin:0 0 6px; font-size:clamp(1.5rem,3vw,2.05rem); }
+  .hero p { margin:0; opacity:.92; }
+  .meta { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+  .chip { padding:6px 12px; border-radius:999px; background:rgba(255,255,255,.16); font-size:13px; }
+  .actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:16px; }
+  .btn { display:inline-flex; padding:11px 16px; border-radius:999px; font-weight:600; font-size:14px; }
+  .btn-primary { background:#fff; color:#0f766e; }
+  .section { margin-top:26px; }
+  .section h2 { margin:0 0 12px; font-size:1.15rem; display:flex; align-items:center; gap:10px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--accent); display:inline-block; }
+  .map-shell { background:var(--card); border:1px solid var(--line); border-radius:22px; overflow:hidden; box-shadow:var(--shadow); position:relative; }
+  #routeMap { width:100%; height:min(52vh,440px); }
+  .day-map { width:100%; height: 320px; border-radius:14px; border:1px solid var(--line); margin:0 0 14px; }
+  .leg-map {
+    width: calc(100% + 14px + 14px + 12px + 72px);
+    max-width: none;
+    margin: 10px 0 0 calc(-14px - 12px - 72px);
+    height: 320px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    box-sizing: border-box;
+  }
+  .legend { position:absolute; z-index:500; left:12px; bottom:12px; background:rgba(255,255,255,.95); border:1px solid var(--line); border-radius:14px; padding:10px 12px; font-size:13px; }
+  .leg { display:flex; align-items:center; gap:8px; margin:4px 0; }
+  .sw { width:18px; height:4px; border-radius:4px; }
+  .day { background:var(--card); border:1px solid var(--line); border-radius:22px; padding:18px; box-shadow:var(--shadow); }
+  .timeline { display:grid; gap:12px; }
+  .item { display:grid; grid-template-columns:72px 1fr; gap:8px 12px; align-items:start; }
+  .time { font-weight:700; color:var(--accent); font-size:13px; }
+  .item-body { background:#faf8f4; border-radius:14px; padding:12px 14px; }
+  .item-body strong { display:block; margin:4px 0; }
+  .roads { margin:0 0 4px; color:var(--muted); font-size:13px; }
+  .tagrow { margin-bottom:2px; }
+  .mode { font-size:12px; padding:3px 8px; border-radius:999px; font-weight:600; }
+  .mode.metro { background:#dbeafe; color:#1d4ed8; }
+  .mode.taxi { background:#ffedd5; color:#c2410c; }
+  .mode.walk { background:#dcfce7; color:#15803d; }
+  .links { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .mini { font-size:12px; padding:8px 12px; border-radius:999px; background:#fff; border:1px solid var(--line); color:var(--ink); }
+  .mini.primary { background:#ff6a00; border-color:#ff6a00; color:#fff; font-weight:600; }
+  .note { margin-top:10px; padding:12px 14px; border-radius:14px; background:#ecfdf5; color:#065f46; font-size:13px; }
+  .hint { color:var(--muted); font-size:13px; margin:8px 0 0; }
+  footer { margin-top:28px; color:var(--muted); font-size:12px; text-align:center; }
+  @media (max-width:560px) {
+    .item { grid-template-columns:52px 1fr; gap:8px 10px; }
+    .leg-map {
+      width: calc(100% + 14px + 14px + 10px + 52px);
+      margin-left: calc(-14px - 10px - 52px);
+      height: 280px;
+    }
+    .day-map { height:280px; }
+    .wrap { padding:16px 10px 48px; }
+    .day { padding:14px; }
+  }
+  .map-pin { background:transparent; border:none; }
+  .pin-badge {
+    width:22px; height:22px; border-radius:50%;
+    color:#fff; font-weight:700; font-size:12px; line-height:18px; text-align:center;
+    border:2px solid #fff; box-shadow:0 2px 6px rgba(0,0,0,.28);
+  }
+  .leaflet-tooltip.map-label {
+    background:rgba(255,255,255,.96); border:1px solid var(--line); border-radius:8px;
+    padding:2px 8px; font-size:12px; font-weight:600; color:var(--ink);
+    box-shadow:0 2px 8px rgba(0,0,0,.12); white-space:nowrap;
+  }
+  .leaflet-tooltip.map-label::before { display:none; }
+  .legend .place-list { margin-top:8px; padding-top:8px; border-top:1px solid var(--line); }
+  .legend .pin-leg { display:flex; align-items:center; gap:6px; margin:3px 0; font-size:12px; }
+  .legend .pin-mini {
+    width:16px; height:16px; border-radius:50%; background:#0f766e; color:#fff;
+    font-size:10px; font-weight:700; display:inline-flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .day-legend {
+    display:flex; flex-wrap:wrap; gap:6px 12px; margin:0 0 12px;
+    font-size:12px; color:var(--muted);
+  }
+  .day-legend .pin-leg { display:inline-flex; align-items:center; gap:5px; }
+  .day-legend .pin-mini {
+    width:16px; height:16px; border-radius:50%; color:#fff;
+    font-size:10px; font-weight:700; display:inline-flex; align-items:center; justify-content:center;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <h1>长沙三日游 · 地铁为主</h1>
+    <p>寄存行李后北门午饭，再橘子洲+岳麓山，晚饭渔湾码头/大学城美食街。数据来自高德。</p>
+    <div class="meta">
+      <span class="chip">少步行偏好</span>
+      <span class="chip">G1107 / G1006</span>
+      <span class="chip">全季·桂花公园</span>
+    </div>
+    <div class="actions">
+      <a class="btn btn-primary" href="amapuri://workInAmap/createWithToken?polymericId=mcp_0195d7f6e0fc442c9cb9232190b6aaf6&from=MCP">在高德 App 打开行程</a>
+    </div>
+  </header>
+
+  <section class="section" id="map">
+    <h2><span class="dot"></span>路线总览</h2>
+    <div class="map-shell">
+      <div id="routeMap"></div>
+      <div class="legend">
+        <strong>行程</strong>
+        <div class="leg"><span class="sw" style="background:var(--d1)"></span>Day1</div>
+        <div class="leg"><span class="sw" style="background:var(--d2)"></span>Day2</div>
+        <div class="leg"><span class="sw" style="background:var(--d3)"></span>Day3</div>
+        <div class="place-list">
+          <strong>地点</strong>
+          <div class="pin-leg"><span class="pin-mini">1</span>长沙南</div>
+          <div class="pin-leg"><span class="pin-mini">2</span>酒店</div>
+          <div class="pin-leg"><span class="pin-mini">3</span>橘子洲</div>
+          <div class="pin-leg"><span class="pin-mini">4</span>岳麓山</div>
+          <div class="pin-leg"><span class="pin-mini">5</span>爱晚亭</div>
+          <div class="pin-leg"><span class="pin-mini">6</span>岳麓书院</div>
+          <div class="pin-leg"><span class="pin-mini">7</span>湖南大学</div>
+          <div class="pin-leg"><span class="pin-mini">午</span>北门饭店</div>
+          <div class="pin-leg"><span class="pin-mini">晚</span>渔湾码头</div>
+          <div class="pin-leg"><span class="pin-mini">8</span>省博</div>
+          <div class="pin-leg"><span class="pin-mini">9</span>烈士公园</div>
+          <div class="pin-leg"><span class="pin-mini">10</span>五一广场</div>
+          <div class="pin-leg"><span class="pin-mini">11</span>IFS</div>
+          <div class="pin-leg"><span class="pin-mini">12</span>黄兴步行街</div>
+          <div class="pin-leg"><span class="pin-mini">13</span>太平老街</div>
+          <div class="pin-leg"><span class="pin-mini">14</span>杜甫江阁</div>
+        </div>
+      </div>
+    </div>
+    <p class="hint">每段标注「地铁主 / 打车主 / 步行主」；点橙色按钮在高德里打开对应方式。</p>
+  </section>
+
+  <section class="section" id="day1">
+    <h2><span class="dot" style="background:var(--d1)"></span>Day1 · 9/25</h2>
+    <div class="day">
+      <div id="map-day1" class="day-map"></div>
+      <div class="day-legend">
+        <span class="pin-leg"><span class="pin-mini" style="background:var(--d1)">1</span>长沙南</span>
+        <span class="pin-leg"><span class="pin-mini" style="background:var(--d1)">2</span>酒店</span>
+        <span class="pin-leg"><span class="pin-mini" style="background:var(--d1)">午</span>北门饭店</span>
+        <span class="pin-leg"><span class="pin-mini" style="background:var(--d1)">3</span>橘子洲</span>
+        <span class="pin-leg"><span class="pin-mini" style="background:var(--d1)">4</span>岳麓山</span>
+        <span class="pin-leg"><span class="pin-mini" style="background:var(--d1)">5</span>爱晚亭</span>
+        <span class="pin-leg"><span class="pin-mini" style="background:var(--d1)">6</span>岳麓书院</span>
+        <span class="pin-leg"><span class="pin-mini" style="background:var(--d1)">7</span>湖南大学</span>
+        <span class="pin-leg"><span class="pin-mini" style="background:var(--d1)">晚</span>渔湾码头</span>
+      </div>
+            <div class="timeline">
+          <div class="item">
+            <div class="time">09:47</div>
+            <div class="item-body">
+              <div class="tagrow"><span class="mode taxi">打车主</span></div>
+              <strong>长沙南站 → 全季酒店（先寄存）</strong>
+              <p class="roads">打车约 9.3 km / 16 分钟。到店先寄存行李，不必等 14:00 才能活动；入住可傍晚回店再办。</p>
+              <p class="roads">地铁备选：2号线转3号线→桂花公园，约42分钟。</p>
+              <div class="links">
+                <a class="mini primary" href="amapuri://route/plan/?slat=28.147093&amp;slon=113.06551&amp;sname=%E9%95%BF%E6%B2%99%E5%8D%97%E7%AB%99&amp;dlat=28.171382&amp;dlon=113.000439&amp;dname=%E5%85%A8%E5%AD%A3%E9%85%92%E5%BA%97&amp;dev=0&amp;t=0">在高德打开推荐方式</a>
+                <a class="mini" href="amapuri://route/plan/?slat=28.147093&amp;slon=113.06551&amp;sname=%E9%95%BF%E6%B2%99%E5%8D%97%E7%AB%99&amp;dlat=28.171382&amp;dlon=113.000439&amp;dname=%E5%85%A8%E5%AD%A3%E9%85%92%E5%BA%97&amp;dev=0&amp;t=1">看地铁方案</a>
+              </div>
+              
+          
+              <div id="leg-d1_1" class="leg-map"></div>
+            </div>
+          </div>
+          <div class="item">
+            <div class="time">11:00</div>
+            <div class="item-body">
+              <div class="tagrow"><span class="mode metro">地铁主</span></div>
+              <strong>全季酒店 → 北门饭店（湘春路）午饭</strong>
+              <p class="roads">地铁约 <b>37 分钟</b>：3号线桂花公园→侯家塘，转1号线→培元桥。约 11:30–12:45 用餐。</p>
+              <p class="roads">北门饭店传统手工长沙菜(湘春路店) · poi B0HR35DMUN · 112.978849,28.208652 · 评分 4.7 · 人均约¥45</p>
+              <p class="roads">地址：望麓园路街道民主后街2号1楼西侧(虹嘉园东南门旁)。营业：周一至周五 11:00-14:00,16:30-21:00；周六至周日 11:00-14:30,16:30-21:30</p>
+              <div class="links">
+                <a class="mini primary" href="amapuri://route/plan/?slat=28.171382&amp;slon=113.000439&amp;sname=%E5%85%A8%E5%AD%A3%E9%85%92%E5%BA%97&amp;dlat=28.208652&amp;dlon=112.978849&amp;dname=%E5%8C%97%E9%97%A8%E9%A5%AD%E5%BA%97&amp;dev=0&amp;t=1">酒店→北门（地铁）</a>
+                <a class="mini" href="amapuri://navi?sourceApplication=amap_mcp&amp;lon=112.978849&amp;lat=28.208652&amp;dev=1&amp;style=2">导航到北门饭店</a>
+                <a class="mini" href="amapuri://poi/detail?poiid=B0HR35DMUN">高德 POI 详情</a>
+              </div>
+              
+          
+              <div id="leg-d1_lunch" class="leg-map"></div>
+            </div>
+          </div>
+          <div class="item">
+            <div class="time">12:50</div>
+            <div class="item-body">
+              <div class="tagrow"><span class="mode metro">地铁主</span></div>
+              <strong>北门饭店 → 橘子洲</strong>
+              <p class="roads">地铁约 <b>28 分钟</b>：培元桥→五一广场，转2号线→橘子洲·青莲。下午逛橘子洲。</p>
+              <div class="links">
+                <a class="mini primary" href="amapuri://route/plan/?slat=28.208652&amp;slon=112.978849&amp;sname=%E5%8C%97%E9%97%A8%E9%A5%AD%E5%BA%97&amp;dlat=28.196505&amp;dlon=112.963081&amp;dname=%E6%A9%98%E5%AD%90%E6%B4%B2&amp;dev=0&amp;t=1">北门→橘子洲（地铁）</a>
+                <a class="mini" href="amapuri://route/plan/?slat=28.208652&amp;slon=112.978849&amp;sname=%E5%8C%97%E9%97%A8%E9%A5%AD%E5%BA%97&amp;dlat=28.196505&amp;dlon=112.963081&amp;dname=%E6%A9%98%E5%AD%90%E6%B4%B2&amp;dev=0&amp;t=0">看打车方案</a>
+              </div>
+              
+          
+              <div id="leg-d1_2" class="leg-map"></div>
+            </div>
+          </div>
+          <div class="item">
+            <div class="time">15:00</div>
+            <div class="item-body">
+              <div class="tagrow"><span class="mode taxi">打车主</span></div>
+              <strong>橘子洲 → 岳麓山</strong>
+              <p class="roads">打车（推荐）：公交约 55–60 分钟，出站后还要走约 1.5–2 km</p>
+              <p class="roads">书院傍晚会闭园（约 17:00），所以提早进山。进山顺序：先岳麓书院（需购票）→ 爱晚亭 → 湖南大学/麓山南路出山。</p>
+              <div class="links">
+                <a class="mini primary" href="amapuri://route/plan/?slat=28.196505&amp;slon=112.963081&amp;sname=%E6%A9%98%E5%AD%90%E6%B4%B2&amp;dlat=28.183601&amp;dlon=112.936104&amp;dname=%E5%B2%B3%E9%BA%93%E5%B1%B1&amp;dev=0&amp;t=0">在高德打开推荐方式</a>
+                <a class="mini" href="amapuri://route/plan/?slat=28.196505&amp;slon=112.963081&amp;sname=%E6%A9%98%E5%AD%90%E6%B4%B2&amp;dlat=28.183601&amp;dlon=112.936104&amp;dname=%E5%B2%B3%E9%BA%93%E5%B1%B1&amp;dev=0&amp;t=1">看公交方案</a>
+              </div>
+              
+          
+              <div id="leg-d1_3" class="leg-map"></div>
+            </div>
+          </div>
+          <div class="item">
+            <div class="time">15:30</div>
+            <div class="item-body">
+              <div class="tagrow"><span class="mode walk">步行主</span></div>
+              <strong>岳麓山内 · 岳麓书院</strong>
+              <p class="roads">评分 4.8 · poi B02DB05TQH · 112.940805,28.180397 · <b>需购票</b></p>
+              <p class="roads">开放：冬季约 07:50–17:00 / 夏季至 17:30。9/25 请按当日闭园卡点，<b>书院赶 ~17:00 前</b>，所以把书院放进山第一站。</p>
+              <div class="links">
+                <a class="mini primary" href="amapuri://navi?sourceApplication=amap_mcp&amp;lon=112.940805&amp;lat=28.180397&amp;dev=1&amp;style=2">导航到岳麓书院</a>
+                <a class="mini" href="amapuri://poi/detail?poiid=B02DB05TQH">高德 POI 详情</a>
+              </div>
+            
+            </div>
+          </div>
+          <div class="item">
+            <div class="time">16:40</div>
+            <div class="item-body">
+              <div class="tagrow"><span class="mode walk">步行主</span></div>
+              <strong>岳麓山内 · 爱晚亭</strong>
+              <p class="roads">评分 4.5 · poi B02DB06929 · 112.937564,28.180437</p>
+              <p class="roads">书院出来后顺路去枫叶亭台；与书院同属山内步行串联，不是另开长途。</p>
+              <div class="links">
+                <a class="mini primary" href="amapuri://navi?sourceApplication=amap_mcp&amp;lon=112.937564&amp;lat=28.180437&amp;dev=1&amp;style=2">导航到爱晚亭</a>
+                <a class="mini" href="amapuri://poi/detail?poiid=B02DB06929">高德 POI 详情</a>
+              </div>
+            
+            </div>
+          </div>
+          <div class="item">
+            <div class="time">17:30</div>
+            <div class="item-body">
+              <div class="tagrow"><span class="mode walk">步行主</span></div>
+              <strong>湖南大学 / 麓山南路（出山走廊）</strong>
+              <p class="roads">湖南大学 · poi B02DB065YW · 112.945185,28.177932 · 麓山南路麓山门一带</p>
+              <p class="roads">麓山南路作下山/出景区走廊，近湖大南门区域。此处前往渔湾码头/大学城美食街晚饭。</p>
+              <div class="links">
+                <a class="mini primary" href="amapuri://navi?sourceApplication=amap_mcp&amp;lon=112.945185&amp;lat=28.177932&amp;dev=1&amp;style=2">导航到湖南大学</a>
+                <a class="mini" href="amapuri://poi/detail?poiid=B02DB065YW">高德 POI 详情</a>
+              </div>
+              
+          
+              <div id="leg-d1_mtn" class="leg-map"></div>
+            </div>
+          </div>
+          <div class="item">
+            <div class="time">18:30</div>
+            <div class="item-body">
+              <div class="tagrow"><span class="mode taxi">打车主</span></div>
+              <strong>岳麓山/湖大 → 渔湾码头晚饭</strong>
+              <p class="roads">驾车约 <b>4.6 公里 / 25 分钟</b>（少步行主选）。公交约 41 分钟且出站步行多，不推荐。</p>
+              <p class="roads">渔湾码头时尚商业广场 / 麓山大学城美食一条街 · poi B02DB0XU49 · 112.944088,28.168563 · 评分 4.8 · 开放 10:00-22:00 · 麓山南路299号</p>
+              <p class="roads">约 18:30–20:00 晚饭，大学城美食街任选。</p>
+              <div class="links">
+                <a class="mini primary" href="amapuri://route/plan/?slat=28.177932&amp;slon=112.945185&amp;sname=%E6%B9%96%E5%8D%97%E5%A4%A7%E5%AD%A6&amp;dlat=28.168563&amp;dlon=112.944088&amp;dname=%E6%B8%94%E6%B9%BE%E7%A0%81%E5%A4%B4&amp;dev=0&amp;t=0">湖大→渔湾（驾车）</a>
+                <a class="mini" href="amapuri://navi?sourceApplication=amap_mcp&amp;lon=112.944088&amp;lat=28.168563&amp;dev=1&amp;style=2">导航到渔湾码头</a>
+                <a class="mini" href="amapuri://poi/detail?poiid=B02DB0XU49">高德 POI 详情</a>
+              </div>
+              
+          
+              <div id="leg-d1_4" class="leg-map"></div>
+            </div>
+          </div>
+          <div class="item">
+            <div class="time">20:15</div>
+            <div class="item-body">
+              <div class="tagrow"><span class="mode metro">地铁主</span></div>
+              <strong>渔湾码头 → 全季酒店</strong>
+              <p class="roads">地铁约 <b>31 分钟</b>：阜埠河 3 号线直达桂花公园。回店办理/确认入住。</p>
+              <div class="links">
+                <a class="mini primary" href="amapuri://route/plan/?slat=28.168563&amp;slon=112.944088&amp;sname=%E6%B8%94%E6%B9%BE%E7%A0%81%E5%A4%B4&amp;dlat=28.171382&amp;dlon=113.000439&amp;dname=%E5%85%A8%E5%AD%A3%E9%85%92%E5%BA%97&amp;dev=0&amp;t=1">渔湾→全季（地铁）</a>
+                <a class="mini" href="amapuri://route/plan/?slat=28.168563&amp;slon=112.944088&amp;sname=%E6%B8%94%E6%B9%BE%E7%A0%81%E5%A4%B4&amp;dlat=28.171382&amp;dlon=113.000439&amp;dname=%E5%85%A8%E5%AD%A3%E9%85%92%E5%BA%97&amp;dev=0&amp;t=0">看打车方案</a>
+              </div>
+              
+          
+              <div id="leg-d1_5" class="leg-map"></div>
+            </div>
+          </div>
+        </div>
+  </section>
+
+  <section class="section" id="day2">
+    <h2><span class="dot" style="background:var(--d2)"></span>Day2 · 9/26</h2>
+    <div class="day">
+      <div id="map-day2" class="day-map"></div>
+      <div class="day-legend">
+        <span class="pin-leg"><span class="pin-mini" style="background:var(--d2)">2</span>酒店</span>
+        <span class="pin-leg"><span class="pin-mini" style="background:var(--d2)">8</span>省博</span>
+        <span class="pin-leg"><span class="pin-mini" style="background:var(--d2)">9</span>烈士公园</span>
+        <span class="pin-leg"><span class="pin-mini" style="background:var(--d2)">10</span>五一广场</span>
+        <span class="pin-leg"><span class="pin-mini" style="background:var(--d2)">11</span>IFS</span>
+        <span class="pin-leg"><span class="pin-mini" style="background:var(--d2)">12</span>黄兴步行街</span>
+        <span class="pin-leg"><span class="pin-mini" style="background:var(--d2)">13</span>太平老街</span>
+        <span class="pin-leg"><span class="pin-mini" style="background:var(--d2)">14</span>杜甫江阁</span>
+      </div>
+      <div class="timeline">
+
+          <div class="item">
+            <div class="time">09:30</div>
+            <div class="item-body">
+              <div class="tagrow"><span class="mode metro">地铁主</span></div>
+              <strong>全季酒店 → 湖南省博物馆</strong>
+              <p class="roads">地铁约 41 分钟：3号线→朝阳村转6号线→烈士公园南（湖南省博物馆）</p>
+              <p class="roads">末段步行约 1 km。建议预约省博。</p>
+              <div class="links">
+                <a class="mini primary" href="amapuri://route/plan/?slat=28.171382&slon=113.000439&sname=%E5%85%A8%E5%AD%A3%E9%85%92%E5%BA%97&dlat=28.211876&dlon=112.993499&dname=%E6%B9%96%E5%8D%97%E7%9C%81%E5%8D%9A%E7%89%A9%E9%A6%86&dev=0&t=1">在高德打开推荐方式</a>
+                <a class="mini" href="amapuri://route/plan/?slat=28.171382&slon=113.000439&sname=%E5%85%A8%E5%AD%A3%E9%85%92%E5%BA%97&dlat=28.211876&dlon=112.993499&dname=%E6%B9%96%E5%8D%97%E7%9C%81%E5%8D%9A%E7%89%A9%E9%A6%86&dev=0&t=0">看打车方案</a>
+              </div>
+              
+          
+              <div id="leg-d2_1" class="leg-map"></div>
+            </div>
+          </div>
+
+          <div class="item">
+            <div class="time">13:00</div>
+            <div class="item-body">
+              <div class="tagrow"><span class="mode walk">步行主</span></div>
+              <strong>省博 → 湖南烈士公园</strong>
+              <p class="roads">步行约 <b>904 米 / 约 12 分钟</b>（高德核对）。评分 4.8 · poi B02DB0TWXG · 开放 06:30–22:00</p>
+              <p class="roads">坐标 112.996432,28.209521（开福区东风路22号）。勿搜到错误远点。</p>
+              <div class="links">
+                <a class="mini primary" href="amapuri://route/plan/?slat=28.211876&amp;slon=112.993499&amp;sname=%E6%B9%96%E5%8D%97%E7%9C%81%E5%8D%9A%E7%89%A9%E9%A6%86&amp;dlat=28.209521&amp;dlon=112.996432&amp;dname=%E6%B9%96%E5%8D%97%E7%83%88%E5%A3%AB%E5%85%AC%E5%9B%AD&amp;dev=0&amp;t=2">高德步行（约904m/12min）</a>
+                <a class="mini" href="amapuri://navi?sourceApplication=amap_mcp&amp;lon=112.996432&amp;lat=28.209521&amp;dev=1&amp;style=2">导航到烈士公园</a>
+                <a class="mini" href="amapuri://poi/detail?poiid=B02DB0TWXG">高德 POI 详情</a>
+              </div>
+              
+          
+              <div id="leg-d2_walk" class="leg-map"></div>
+            </div>
+          </div>
+
+          <div class="item">
+            <div class="time">13:30</div>
+            <div class="item-body">
+              <div class="tagrow"><span class="mode metro">公交主</span></div>
+              <strong>烈士公园 / 省博一带 → IFS 午饭</strong>
+              <p class="roads">省博→IFS 公交约 <b>31 分钟</b>（高德）。午晚都在 IFS 国金购物中心一带，馆内不用再通勤到别处吃饭。</p>
+              <p class="roads">IFS国金购物中心 · poi B0HAK9J7KY · 112.978724,28.192460 · 评分 4.9 · 开放 10:00-22:00。午饭在 IFS 内/周边任选。</p>
+              <div class="links">
+                <a class="mini primary" href="amapuri://route/plan/?slat=28.211876&amp;slon=112.993499&amp;sname=%E6%B9%96%E5%8D%97%E7%9C%81%E5%8D%9A%E7%89%A9%E9%A6%86&amp;dlat=28.192460&amp;dlon=112.978724&amp;dname=IFS&amp;dev=0&amp;t=1">省博→IFS（公交）</a>
+                <a class="mini" href="amapuri://route/plan/?slat=28.209521&amp;slon=112.996432&amp;sname=%E6%B9%96%E5%8D%97%E7%83%88%E5%A3%AB%E5%85%AC%E5%9B%AD&amp;dlat=28.192460&amp;dlon=112.978724&amp;dname=IFS&amp;dev=0&amp;t=1">烈士公园→IFS</a>
+                <a class="mini" href="amapuri://navi?sourceApplication=amap_mcp&amp;lon=112.978724&amp;lat=28.192460&amp;dev=1&amp;style=2">导航到 IFS</a>
+                <a class="mini" href="amapuri://poi/detail?poiid=B0HAK9J7KY">IFS POI 详情</a>
+              </div>
+              
+          
+              <div id="leg-d2_2" class="leg-map"></div>
+            </div>
+          </div>
+
+          <div class="item">
+            <div class="time">15:00</div>
+            <div class="item-body">
+              <div class="tagrow"><span class="mode walk">步行主</span></div>
+              <strong>IFS 周边：五一 / 黄兴 / 太平（少额外通勤）</strong>
+              <p class="roads">五一广场 poi B02DB066DT · 112.977340,28.196500 · 评分 4.8。黄兴路步行街中心广场 112.976424,28.188459 · poi B0FFHJ43SA · 评分 4.8。</p>
+              <p class="roads">均在 IFS 附近，午后短逛即可；傍晚约 18:40–19:00 再往杜甫江阁看夜景。</p>
+              <div class="links">
+                <a class="mini primary" href="amapuri://navi?sourceApplication=amap_mcp&amp;lon=112.977340&amp;lat=28.196500&amp;dev=1&amp;style=2">导航到五一广场</a>
+                <a class="mini" href="amapuri://navi?sourceApplication=amap_mcp&amp;lon=112.976424&amp;lat=28.188459&amp;dev=1&amp;style=2">导航到黄兴步行街</a>
+                <a class="mini" href="amapuri://navi?sourceApplication=amap_mcp&amp;lon=112.972071&amp;lat=28.193573&amp;dev=1&amp;style=2">导航到太平老街</a>
+              </div>
+            
+            </div>
+          </div>
+
+          <div class="item">
+            <div class="time">18:40</div>
+            <div class="item-body">
+              <div class="tagrow"><span class="mode walk">步行主</span></div>
+              <strong>黄兴/太平一带 → 杜甫江阁</strong>
+              <p class="roads">约 18:40 出发。从太平老街步行约 1346 米 / 约 18 分钟；也可从黄兴中心广场打车。</p>
+              <p class="roads">周六开放 09:00–18:30、19:00–22:00（中间休息）；约 19:00 到刚好接夜景场，末入园多在 21:30。</p>
+              <div class="links">
+                <a class="mini primary" href="amapuri://route/plan/?slat=28.193573&amp;slon=112.972071&amp;sname=%E5%A4%AA%E5%B9%B3%E8%80%81%E8%A1%97&amp;dlat=28.184442&amp;dlon=112.968624&amp;dname=%E6%9D%9C%E7%94%AB%E6%B1%9F%E9%98%81&amp;dev=0&amp;t=2">太平→杜甫（步行）</a>
+                <a class="mini" href="amapuri://route/plan/?slat=28.188459&amp;slon=112.976424&amp;sname=%E9%BB%84%E5%85%B4%E6%AD%A5%E8%A1%8C%E8%A1%97&amp;dlat=28.184442&amp;dlon=112.968624&amp;dname=%E6%9D%9C%E7%94%AB%E6%B1%9F%E9%98%81&amp;dev=0&amp;t=0">黄兴→杜甫（打车）</a>
+                <a class="mini" href="amapuri://navi?sourceApplication=amap_mcp&amp;lon=112.968624&amp;lat=28.184442&amp;dev=1&amp;style=2">导航到杜甫江阁</a>
+              </div>
+              
+          
+              <div id="leg-d2_3" class="leg-map"></div>
+            </div>
+          </div>
+
+          <div class="item">
+            <div class="time">19:00</div>
+            <div class="item-body">
+              <div class="tagrow"><span class="mode walk">步行主</span></div>
+              <strong>杜甫江阁 · 夜景</strong>
+              <p class="roads">评分 4.8 · 湘江中路二段108号（poi B0FFFYEF1T）。临江看灯影，建议停留约 40–60 分钟。</p>
+              <p class="roads">约 19:00 夜景。看完步行回 IFS 一带晚饭（坛宗剁椒鱼头·悦方近 IFS，或 IFS 内/周边任选）。</p>
+              <div class="links">
+                <a class="mini primary" href="amapuri://navi?sourceApplication=amap_mcp&amp;lon=112.968624&amp;lat=28.184442&amp;dev=1&amp;style=2">导航到杜甫江阁</a>
+                <a class="mini" href="amapuri://route/plan/?slat=28.184442&amp;slon=112.968624&amp;sname=%E6%9D%9C%E7%94%AB%E6%B1%9F%E9%98%81&amp;dlat=28.192460&amp;dlon=112.978724&amp;dname=IFS&amp;dev=0&amp;t=2">步行回 IFS 晚饭</a>
+                <a class="mini" href="amapuri://route/plan/?slat=28.184442&amp;slon=112.968624&amp;sname=%E6%9D%9C%E7%94%AB%E6%B1%9F%E9%98%81&amp;dlat=28.189825&amp;dlon=112.975324&amp;dname=%E5%9D%9B%E5%AE%97%E5%89%81%E6%A4%92%E9%B1%BC%E5%A4%B4&amp;dev=0&amp;t=2">步行去坛宗（悦方）</a>
+              </div>
+            
+            </div>
+          </div>
+
+          <div class="item">
+            <div class="time">20:00</div>
+            <div class="item-body">
+              <div class="tagrow"><span class="mode walk">步行主</span></div>
+              <strong>杜甫江阁 → IFS 一带晚饭</strong>
+              <p class="roads">晚饭在 IFS 内/周边任选；推荐坛宗剁椒鱼头（悦方近 IFS）。午晚同区，不必另开长途。</p>
+            
+            </div>
+          </div>
+
+          <div class="item">
+            <div class="time">晚上</div>
+            <div class="item-body">
+              <div class="tagrow"><span class="mode metro">地铁主</span></div>
+              <strong>IFS / 坛宗晚饭后 → 全季酒店</strong>
+              <p class="roads">地铁：五一广场/侯家塘方向转3号线→桂花公园，约 30–40 分钟</p>
+              <p class="roads">打车备选约 4–5 km / 12–15 分钟。晚饭详见解下「中午/晚饭」。</p>
+              <div class="links">
+                <a class="mini primary" href="amapuri://route/plan/?slat=28.192460&amp;slon=112.978724&amp;sname=IFS&amp;dlat=28.171382&amp;dlon=113.000439&amp;dname=%E5%85%A8%E5%AD%A3%E9%85%92%E5%BA%97&amp;dev=0&amp;t=1">IFS→全季（地铁）</a>
+                <a class="mini" href="amapuri://route/plan/?slat=28.189825&amp;slon=112.975324&amp;sname=%E5%9D%9B%E5%AE%97%E5%89%81%E6%A4%92%E9%B1%BC%E5%A4%B4&amp;dlat=28.171382&amp;dlon=113.000439&amp;dname=%E5%85%A8%E5%AD%A3%E9%85%92%E5%BA%97&amp;dev=0&amp;t=1">坛宗→全季（地铁）</a>
+                <a class="mini" href="amapuri://route/plan/?slat=28.192460&amp;slon=112.978724&amp;sname=IFS&amp;dlat=28.171382&amp;dlon=113.000439&amp;dname=%E5%85%A8%E5%AD%A3%E9%85%92%E5%BA%97&amp;dev=0&amp;t=0">看打车方案</a>
+              </div>
+              
+          
+              <div id="leg-d2_4" class="leg-map"></div>
+            </div>
+          </div>
+      </div>
+    </div>
+  </section>
+
+  
+  <section class="section" id="food">
+    <h2><span class="dot"></span>中午 / 晚饭（长沙特色）</h2>
+    <div class="day">
+      <div class="timeline">
+        <div class="item">
+            <div class="time">Day1<br>午饭</div>
+            <div class="item-body">
+            <div class="tagrow"><span class="mode metro">地铁主</span></div>
+            <strong>北门饭店传统手工长沙菜（湘春路店）</strong>
+            <p class="roads">评分 4.7 · 人均约 ¥45 · poi B0HR35DMUN · 112.978849,28.208652</p>
+            <p class="roads">地址：望麓园路街道民主后街2号1楼西侧(虹嘉园东南门旁)</p>
+            <p class="roads">营业：周一至周五 11:00-14:00,16:30-21:00；周六至周日 11:00-14:30,16:30-21:30</p>
+            <p class="roads">酒店→店：地铁约 37 分钟（3号线桂花公园→侯家塘，转1号线→培元桥）。约 11:30–12:45 用餐。</p>
+            <div class="links">
+              <a class="mini primary" href="amapuri://route/plan/?slat=28.171382&amp;slon=113.000439&amp;sname=%E5%85%A8%E5%AD%A3%E9%85%92%E5%BA%97&amp;dlat=28.208652&amp;dlon=112.978849&amp;dname=%E5%8C%97%E9%97%A8%E9%A5%AD%E5%BA%97&amp;dev=0&amp;t=1">高德地铁去北门</a>
+              <a class="mini" href="amapuri://navi?sourceApplication=amap_mcp&amp;lon=112.978849&amp;lat=28.208652&amp;dev=1&amp;style=2">导航到店</a>
+              <a class="mini" href="amapuri://poi/detail?poiid=B0HR35DMUN">高德 POI 详情</a>
+            </div>
+          
+            </div>
+          </div>
+        <div class="item">
+            <div class="time">Day1<br>晚饭</div>
+            <div class="item-body">
+            <div class="tagrow"><span class="mode taxi">打车主</span></div>
+            <strong>渔湾码头时尚商业广场 / 麓山大学城美食一条街</strong>
+            <p class="roads">评分 4.8 · 开放 10:00-22:00 · poi B02DB0XU49 · 112.944088,28.168563 · 麓山南路299号</p>
+            <p class="roads">岳麓山/湖大→店：驾车约 4.6 公里 / 25 分钟（少步行主选）；公交约 41 分钟且出站步行多。</p>
+            <p class="roads">约 18:30–20:00 晚饭。回酒店：阜埠河 3 号线直达桂花公园，地铁约 31 分钟。</p>
+            <div class="links">
+              <a class="mini primary" href="amapuri://route/plan/?slat=28.177932&amp;slon=112.945185&amp;sname=%E6%B9%96%E5%8D%97%E5%A4%A7%E5%AD%A6&amp;dlat=28.168563&amp;dlon=112.944088&amp;dname=%E6%B8%94%E6%B9%BE%E7%A0%81%E5%A4%B4&amp;dev=0&amp;t=0">高德驾车去渔湾</a>
+              <a class="mini" href="amapuri://navi?sourceApplication=amap_mcp&amp;lon=112.944088&amp;lat=28.168563&amp;dev=1&amp;style=2">导航到渔湾码头</a>
+              <a class="mini" href="amapuri://poi/detail?poiid=B02DB0XU49">高德 POI 详情</a>
+            </div>
+          
+            </div>
+          </div>
+        <div class="item">
+            <div class="time">Day2<br>午饭</div>
+            <div class="item-body">
+            <div class="tagrow"><span class="mode metro">公交主</span></div>
+            <strong>IFS国金购物中心（内/周边任选）</strong>
+            <p class="roads">评分 4.9 · 开放 10:00-22:00 · poi B0HAK9J7KY · 112.978724,28.192460</p>
+            <p class="roads">省博→IFS：公交约 31 分钟。烈士公园之后来此午饭；午晚同区，不必再去火宫殿等远处。</p>
+            <div class="links">
+              <a class="mini primary" href="amapuri://route/plan/?slat=28.211876&amp;slon=112.993499&amp;sname=%E6%B9%96%E5%8D%97%E7%9C%81%E5%8D%9A%E7%89%A9%E9%A6%86&amp;dlat=28.192460&amp;dlon=112.978724&amp;dname=IFS&amp;dev=0&amp;t=1">高德公交去 IFS</a>
+              <a class="mini" href="amapuri://navi?sourceApplication=amap_mcp&amp;lon=112.978724&amp;lat=28.192460&amp;dev=1&amp;style=2">导航到 IFS</a>
+              <a class="mini" href="amapuri://poi/detail?poiid=B0HAK9J7KY">高德 POI 详情</a>
+            </div>
+          
+            </div>
+          </div>
+        <div class="item">
+            <div class="time">Day2<br>晚饭</div>
+            <div class="item-body">
+            <div class="tagrow"><span class="mode walk">步行主</span></div>
+            <strong>IFS 一带 · 坛宗剁椒鱼头（悦方）或馆内任选</strong>
+            <p class="roads">坛宗：评分 4.6 · 人均约 ¥96 · 11:00–21:00 · 坡子街悦方5楼（近 IFS）</p>
+            <p class="roads">杜甫江阁夜景后步行回 IFS / 坛宗晚饭。IFS 内或周边均可。</p>
+            <div class="links">
+              <a class="mini primary" href="amapuri://route/plan/?slat=28.184442&amp;slon=112.968624&amp;sname=%E6%9D%9C%E7%94%AB%E6%B1%9F%E9%98%81&amp;dlat=28.192460&amp;dlon=112.978724&amp;dname=IFS&amp;dev=0&amp;t=2">高德步行回 IFS</a>
+              <a class="mini" href="amapuri://route/plan/?slat=28.184442&amp;slon=112.968624&amp;sname=%E6%9D%9C%E7%94%AB%E6%B1%9F%E9%98%81&amp;dlat=28.189825&amp;dlon=112.975324&amp;dname=%E5%9D%9B%E5%AE%97%E5%89%81%E6%A4%92%E9%B1%BC%E5%A4%B4&amp;dev=0&amp;t=2">高德步行去坛宗</a>
+              <a class="mini" href="amapuri://navi?sourceApplication=amap_mcp&amp;lon=112.975324&amp;lat=28.189825&amp;dev=1&amp;style=2">导航到坛宗</a>
+            </div>
+          
+            </div>
+          </div>
+      </div>
+      <div class="note">餐食数字经高德公交/驾车核对。北门注意午市时段；坛宗高峰可能排队，可错峰或提前取号。炊烟 / 严三毛 / 火宫殿已不作为主选。</div>
+    </div>
+  </section>
+
+  <section class="section" id="day3">
+    <h2><span class="dot" style="background:var(--d3)"></span>Day3 · 9/27</h2>
+    <div class="day">
+      <div id="map-day3" class="day-map"></div>
+      <div class="day-legend">
+        <span class="pin-leg"><span class="pin-mini" style="background:var(--d3)">2</span>酒店</span>
+        <span class="pin-leg"><span class="pin-mini" style="background:var(--d3)">1</span>长沙南</span>
+      </div>
+      <div class="timeline">
+        <div class="item">
+            <div class="time">11:30</div>
+            <div class="item-body"><strong>12:00 前退房</strong><p class="roads">可暂存行李。</p>
+            </div>
+          </div>
+
+          <div class="item">
+            <div class="time">13:30</div>
+            <div class="item-body">
+              <div class="tagrow"><span class="mode taxi">打车主</span></div>
+              <strong>全季酒店 → 长沙南站</strong>
+              <p class="roads">打车（带行李赶 G1006）约 9.4 km / 16 分钟，建议 14:30 前到站</p>
+              <p class="roads">地铁备选：3号线桂花公园→长沙火车站转2号线→长沙火车南站，约40分钟，步行约600米。</p>
+              <div class="links">
+                <a class="mini primary" href="amapuri://route/plan/?slat=28.171382&slon=113.000439&sname=%E5%85%A8%E5%AD%A3%E9%85%92%E5%BA%97&dlat=28.147093&dlon=113.06551&dname=%E9%95%BF%E6%B2%99%E5%8D%97%E7%AB%99&dev=0&t=0">在高德打开推荐方式</a>
+                <a class="mini" href="amapuri://route/plan/?slat=28.171382&slon=113.000439&sname=%E5%85%A8%E5%AD%A3%E9%85%92%E5%BA%97&dlat=28.147093&dlon=113.06551&dname=%E9%95%BF%E6%B2%99%E5%8D%97%E7%AB%99&dev=0&t=1">看地铁方案</a>
+              </div>
+              
+          
+              <div id="leg-d3_1" class="leg-map"></div>
+            </div>
+          </div>
+        <div class="item">
+            <div class="time">15:43</div>
+            <div class="item-body"><strong>G1006 返汉</strong><p class="roads">09车10B，17:01 到武汉。</p>
+            </div>
+          </div>
+      </div>
+      <div class="note">原则：市区地铁；南站↔酒店带行李、橘子洲↔岳麓山用打车。不是地铁不好，是之前页只嵌了驾车。</div>
+    </div>
+  </section>
+  </div>
+<footer>公交/驾车数据：高德 MCP · 网页折线便于预览走向</footer>
+</div>
+<script>
+const LEGS = {"d1_1":[[28.147903,113.065462],[28.147913,113.065676],[28.147981,113.067158],[28.148057,113.067285],[28.148135,113.067259],[28.149221,113.066897],[28.151706,113.066046],[28.151971,113.065953],[28.152254,113.065863],[28.152488,113.065812],[28.152755,113.065761],[28.152894,113.065743],[28.152937,113.065737],[28.152951,113.065736],[28.152946,113.06564],[28.152939,113.065509],[28.152841,113.064014],[28.152828,113.063831],[28.153084,113.063812],[28.15572,113.063589],[28.155798,113.063582],[28.155775,113.063034],[28.155767,113.062838],[28.155707,113.061873],[28.155672,113.061354],[28.155648,113.060986],[28.155531,113.059237],[28.155432,113.057799],[28.155406,113.057396],[28.155368,113.056832],[28.155312,113.055967],[28.155271,113.055363],[28.155254,113.055101],[28.155251,113.055057],[28.155242,113.054875],[28.15524,113.054835],[28.155343,113.054831],[28.155379,113.05483],[28.155688,113.054805],[28.156277,113.054758],[28.157451,113.054664],[28.157736,113.054641],[28.157801,113.054634],[28.158129,113.054601],[28.160143,113.054479],[28.160462,113.054454],[28.160631,113.05444],[28.160977,113.054442],[28.161099,113.054443],[28.161133,113.054443],[28.161481,113.054449],[28.161828,113.05447],[28.162244,113.054499],[28.162612,113.05453],[28.163056,113.054594],[28.163294,113.054632],[28.163484,113.054662],[28.164083,113.054777],[28.164236,113.054811],[28.16449,113.054869],[28.164614,113.0549],[28.164675,113.054914],[28.164957,113.054984],[28.165013,113.055],[28.165628,113.055181],[28.166808,113.055518],[28.166942,113.055554],[28.167058,113.055586],[28.167486,113.055704],[28.168,113.055834],[28.16847,113.05594],[28.168962,113.056025],[28.169397,113.056094],[28.169853,113.056153],[28.170291,113.056195],[28.170745,113.056226],[28.171077,113.056232],[28.171601,113.056243],[28.171762,113.056256],[28.172741,113.056243],[28.17274,113.056079],[28.172712,113.054293],[28.172346,113.05239],[28.172276,113.051693],[28.172243,113.050529],[28.172199,113.048291],[28.172186,113.04658],[28.172265,113.044696],[28.172279,113.044259],[28.172287,113.043769],[28.172321,113.042284],[28.172601,113.035531],[28.17266,113.034031],[28.172717,113.032597],[28.172781,113.030771],[28.172859,113.028084],[28.172871,113.027696],[28.172891,113.027176],[28.172897,113.027038],[28.172904,113.026525],[28.173034,113.022798],[28.173124,113.019361],[28.173127,113.0191],[28.173234,113.015183],[28.173236,113.014932],[28.173235,113.014738],[28.173238,113.01432],[28.173239,113.014228],[28.173239,113.014033],[28.173219,113.013489],[28.173184,113.013098],[28.173171,113.012869],[28.173202,113.011261],[28.173216,113.011061],[28.173302,113.008765],[28.173302,113.008498],[28.17332,113.00794],[28.173394,113.006922],[28.173429,113.006044],[28.173645,113.002428],[28.173648,113.002186],[28.173669,113.001529],[28.17359,113.001523],[28.173148,113.00153],[28.17292,113.001533],[28.172611,113.001538],[28.172468,113.00154],[28.172417,113.001541],[28.172422,113.000951],[28.172305,113.000954],[28.172216,113.000956],[28.172079,113.000959],[28.17193,113.000963],[28.171813,113.000966],[28.171721,113.000968],[28.171393,113.000977]],"d1_2":[[28.208652,112.978849],[28.205,112.975],[28.2,112.97],[28.198,112.965],[28.196505,112.963081]],"d1_3":[[28.196505,112.963078],[28.196357,112.963054],[28.196233,112.963036],[28.196131,112.963024],[28.195891,112.96301],[28.195667,112.963006],[28.195546,112.963009],[28.195462,112.963011],[28.195452,112.963139],[28.195439,112.963272],[28.195454,112.963274],[28.195522,112.963285],[28.195555,112.96329],[28.195655,112.963301],[28.195774,112.963305],[28.196091,112.963318],[28.196241,112.96333],[28.19638,112.963343],[28.196526,112.963361],[28.196678,112.963387],[28.196839,112.963418],[28.196923,112.963432],[28.197034,112.963445],[28.197498,112.96347],[28.19762,112.963477],[28.197771,112.963482],[28.197848,112.963485],[28.197899,112.963486],[28.198334,112.963497],[28.198878,112.96352],[28.199106,112.96352],[28.199388,112.963529],[28.199583,112.963537],[28.199691,112.963578],[28.199733,112.963594],[28.199775,112.963613],[28.199813,112.963637],[28.199852,112.963679],[28.199891,112.963734],[28.199921,112.963794],[28.199934,112.963854],[28.199938,112.963918],[28.199935,112.963979],[28.199911,112.964055],[28.199886,112.964108],[28.199627,112.964567],[28.199581,112.964628],[28.199529,112.964673],[28.199473,112.964704],[28.199413,112.964722],[28.199347,112.964727],[28.19929,112.964719],[28.199238,112.964704],[28.199187,112.964676],[28.199142,112.964637],[28.199097,112.964581],[28.199067,112.964523],[28.199046,112.96445],[28.199032,112.964367],[28.199011,112.964246],[28.198992,112.964089],[28.199024,112.96315],[28.199147,112.961423],[28.199223,112.959412],[28.199257,112.957515],[28.199264,112.957177],[28.199298,112.956338],[28.199495,112.950798],[28.199531,112.949739],[28.199595,112.948626],[28.199672,112.94709],[28.199664,112.946887],[28.199643,112.946758],[28.19961,112.946674],[28.199561,112.946605],[28.199496,112.946557],[28.199416,112.946515],[28.199239,112.946429],[28.199192,112.946406],[28.199046,112.946332],[28.198184,112.945836],[28.197573,112.945489],[28.196999,112.945185],[28.196917,112.945144],[28.196824,112.945101],[28.196787,112.945083],[28.196649,112.945027],[28.19658,112.945004],[28.196508,112.944984],[28.19643,112.944963],[28.195799,112.944836],[28.195102,112.944691],[28.19494,112.944659],[28.194423,112.944557],[28.194348,112.944539],[28.194288,112.944516],[28.194193,112.944463],[28.194016,112.944362],[28.193893,112.944282],[28.192982,112.94366],[28.192682,112.943467],[28.1925,112.943349],[28.192242,112.943186],[28.192216,112.943169],[28.191631,112.942783],[28.191522,112.942704],[28.191437,112.942651],[28.191376,112.94262],[28.191304,112.942607],[28.191217,112.942592],[28.191108,112.942592],[28.190931,112.942598],[28.189947,112.942645],[28.18899,112.942687],[28.188557,112.942706],[28.187841,112.942733],[28.187606,112.942736],[28.187548,112.94273],[28.187478,112.942698],[28.187083,112.942494],[28.186962,112.942426],[28.186924,112.942404],[28.186853,112.942355],[28.186768,112.942285],[28.186615,112.942161],[28.18583,112.94154],[28.185724,112.941458],[28.185612,112.941393],[28.185501,112.941344],[28.185393,112.941309],[28.185306,112.941293],[28.185187,112.941271],[28.185084,112.941258],[28.184999,112.941249],[28.184917,112.941246],[28.184664,112.941242],[28.184626,112.941241],[28.183057,112.941218],[28.182994,112.941198],[28.182949,112.941168],[28.182922,112.941129],[28.182897,112.941082],[28.18287,112.941003],[28.182888,112.94039],[28.182914,112.939427],[28.182915,112.939387],[28.182918,112.939247],[28.182918,112.939025],[28.182921,112.938985],[28.182942,112.938944],[28.182986,112.938892],[28.18304,112.938851],[28.183098,112.938797],[28.183128,112.938745],[28.183156,112.938682],[28.183181,112.938595],[28.183195,112.938508],[28.183206,112.93838],[28.183203,112.93798],[28.183205,112.937027],[28.183206,112.936994],[28.183218,112.936603],[28.183233,112.936549],[28.183259,112.936508],[28.183302,112.936475],[28.183363,112.936449],[28.183419,112.936432],[28.183453,112.936427],[28.183484,112.936423],[28.183564,112.936424],[28.183579,112.936425]],"d1_4":[[28.177932,112.945185],[28.175,112.9445],[28.172,112.9442],[28.168563,112.944088]],"d2_1":[[28.171393,113.000977],[28.171721,113.000968],[28.171813,113.000966],[28.17193,113.000963],[28.172079,113.000959],[28.172216,113.000956],[28.172305,113.000954],[28.172422,113.000951],[28.172417,113.001541],[28.172468,113.00154],[28.172611,113.001538],[28.17292,113.001533],[28.173148,113.00153],[28.17359,113.001523],[28.173669,113.001529],[28.173702,113.000924],[28.173816,112.998809],[28.17389,112.997439],[28.173998,112.995591],[28.173972,112.995365],[28.1744,112.995245],[28.174767,112.99522],[28.175281,112.995339],[28.176415,112.995651],[28.177305,112.995903],[28.177566,112.995952],[28.177961,112.99592],[28.178857,112.995603],[28.179653,112.995302],[28.180139,112.995247],[28.180603,112.995303],[28.181118,112.99548],[28.181133,112.995485],[28.181191,112.995509],[28.181222,112.995443],[28.181257,112.995372],[28.182304,112.993233],[28.182983,112.991856],[28.183204,112.991408],[28.18357,112.991449],[28.184832,112.991593],[28.186299,112.991746],[28.186969,112.991823],[28.187749,112.991913],[28.188519,112.991967],[28.189006,112.991951],[28.18909,112.991948],[28.189206,112.991926],[28.190626,112.99172],[28.192244,112.991471],[28.194127,112.99125],[28.194236,112.991218],[28.194438,112.991169],[28.195007,112.99114],[28.195333,112.991147],[28.195532,112.991211],[28.195899,112.991232],[28.196151,112.991245],[28.196614,112.991302],[28.197582,112.991421],[28.197645,112.991428],[28.197689,112.991429],[28.197727,112.991423],[28.197788,112.991405],[28.197822,112.991394],[28.197851,112.991381],[28.197893,112.991356],[28.197922,112.991333],[28.197944,112.991311],[28.197966,112.991287],[28.197986,112.991267],[28.198004,112.991233],[28.198022,112.991189],[28.198038,112.991126],[28.198047,112.990895],[28.19809,112.989739],[28.198096,112.98932],[28.198143,112.988867],[28.198199,112.987166],[28.198228,112.986455],[28.19845,112.986408],[28.199496,112.986184],[28.200119,112.986047],[28.200975,112.985883],[28.201086,112.985864],[28.201184,112.985855],[28.201248,112.985855],[28.201314,112.985855],[28.201499,112.985855],[28.202023,112.985868],[28.202971,112.985962],[28.203689,112.986045],[28.204117,112.986124],[28.204453,112.98621],[28.204607,112.986255],[28.204727,112.986312],[28.204894,112.986395],[28.205416,112.986655],[28.2059,112.986927],[28.206041,112.986998],[28.206168,112.987048],[28.206294,112.987087],[28.206423,112.987114],[28.206568,112.987131],[28.206644,112.98714],[28.206698,112.987144],[28.206758,112.987141],[28.2068,112.987132],[28.206855,112.98711],[28.20687,112.987104],[28.206921,112.987074],[28.206979,112.987025],[28.207025,112.986972],[28.207065,112.986905],[28.207098,112.986824],[28.207122,112.986724],[28.207107,112.986465],[28.2071,112.986263],[28.207095,112.986],[28.207094,112.985628],[28.20711,112.985491],[28.207128,112.985387],[28.207151,112.985309],[28.207175,112.985263],[28.207215,112.985223],[28.207253,112.985196],[28.207293,112.985176],[28.207345,112.98516],[28.207827,112.985227],[28.208132,112.985252],[28.208897,112.985359],[28.209288,112.985394],[28.211114,112.985677],[28.212312,112.985862],[28.215533,112.98636],[28.215998,112.986432],[28.216612,112.986564],[28.216591,112.987005],[28.216505,112.988123],[28.216491,112.989084],[28.216499,112.990466],[28.216507,112.990594],[28.216551,112.9907],[28.21658,112.990761],[28.215894,112.990883],[28.215453,112.991152],[28.214878,112.991393],[28.214204,112.991528],[28.213561,112.991634],[28.213189,112.991256],[28.212858,112.990387],[28.212579,112.990237],[28.212077,112.990067],[28.212007,112.990064],[28.211049,112.99002],[28.210806,112.990849],[28.210399,112.991639],[28.210297,112.99176],[28.21029,112.991768]],"d2_2":[[28.211876,112.993499],[28.208,112.99],[28.202,112.985],[28.197,112.981],[28.19246,112.978724]],"d2_3":[[28.193573,112.972071],[28.1928,112.9721],[28.1922,112.97205],[28.1915,112.9712],[28.1908,112.9704],[28.19,112.9697],[28.1892,112.9692],[28.1882,112.96895],[28.1872,112.96885],[28.1862,112.9688],[28.1852,112.96875],[28.184442,112.968624]],"d2_4":[[28.19246,112.978724],[28.19,112.982],[28.185,112.99],[28.178,112.995],[28.1735,112.998],[28.171382,113.000439]],"d3_1":[[28.171393,113.000977],[28.171721,113.000968],[28.171813,113.000966],[28.17193,113.000963],[28.172079,113.000959],[28.172216,113.000956],[28.172305,113.000954],[28.172422,113.000951],[28.172417,113.001541],[28.172468,113.00154],[28.172611,113.001538],[28.17292,113.001533],[28.173148,113.00153],[28.17359,113.001523],[28.173563,113.00219],[28.173548,113.002447],[28.173333,113.006911],[28.173262,113.007936],[28.173231,113.008827],[28.173131,113.010521],[28.17312,113.011074],[28.173112,113.012305],[28.173104,113.013041],[28.173119,113.013616],[28.173156,113.014677],[28.173167,113.015386],[28.173013,113.021146],[28.172811,113.026689],[28.172814,113.02683],[28.172818,113.026992],[28.172781,113.027682],[28.172754,113.028953],[28.172732,113.029529],[28.172564,113.034022],[28.172507,113.035545],[28.172312,113.040572],[28.172254,113.04206],[28.17225,113.042428],[28.17218,113.044167],[28.172153,113.044706],[28.17206,113.047505],[28.172074,113.050541],[28.172043,113.051637],[28.171991,113.052544],[28.171854,113.053655],[28.171745,113.054632],[28.17176,113.056073],[28.171593,113.056071],[28.171218,113.056061],[28.170821,113.056051],[28.170509,113.056037],[28.170202,113.056013],[28.169698,113.055961],[28.169281,113.055908],[28.168686,113.055801],[28.168328,113.055731],[28.16784,113.055613],[28.167421,113.055507],[28.167327,113.055483],[28.167056,113.055407],[28.16694,113.055374],[28.166615,113.055283],[28.166527,113.055257],[28.165681,113.05501],[28.165267,113.054898],[28.16497,113.05482],[28.164673,113.054742],[28.164611,113.054726],[28.164525,113.054703],[28.164299,113.054657],[28.163941,113.054584],[28.163632,113.054522],[28.163353,113.054467],[28.163318,113.054461],[28.162943,113.054402],[28.162631,113.054368],[28.162293,113.05434],[28.161985,113.054313],[28.161506,113.054293],[28.161149,113.054282],[28.161099,113.054283],[28.160977,113.054286],[28.160631,113.054294],[28.160467,113.054306],[28.160162,113.054328],[28.159003,113.054365],[28.15813,113.054434],[28.157836,113.054457],[28.15779,113.054461],[28.157442,113.054492],[28.156975,113.054531],[28.156126,113.054599],[28.155683,113.054637],[28.155375,113.054663],[28.155334,113.054666],[28.155232,113.054675],[28.155126,113.054684],[28.155135,113.054839],[28.15514,113.054908],[28.155149,113.055065],[28.155152,113.055122],[28.155167,113.055363],[28.155262,113.056843],[28.155274,113.057043],[28.155301,113.057408],[28.155368,113.058312],[28.155446,113.059439],[28.155549,113.06107],[28.15567,113.062855],[28.155683,113.063039],[28.154963,113.063082],[28.153332,113.063159],[28.152871,113.06323],[28.152789,113.063251],[28.152732,113.063266],[28.152482,113.06333],[28.152268,113.063357],[28.150606,113.063512],[28.149921,113.063555],[28.149664,113.063577],[28.148501,113.063664],[28.148066,113.063655],[28.147991,113.063647],[28.14787,113.063654],[28.147772,113.063659],[28.147812,113.064261],[28.147863,113.064588],[28.147903,113.065462]],"d1_mtn":[[28.183601,112.936104],[28.1825,112.9368],[28.1815,112.9372],[28.180437,112.937564],[28.1804,112.9392],[28.180397,112.940805],[28.1795,112.9425],[28.1785,112.944],[28.177932,112.945185]],"d2_walk":[[28.211876,112.993499],[28.211876,112.99285],[28.21145,112.99285],[28.211,112.9925],[28.2094,112.9925],[28.2094,112.9951],[28.2099,112.9959],[28.209,112.9975],[28.209521,112.996432]],"d1_lunch":[[28.171382,113.000439],[28.175,112.995],[28.185,112.985],[28.195,112.98],[28.205,112.979],[28.208652,112.978849]],"d1_5":[[28.168563,112.944088],[28.1695,112.955],[28.1705,112.97],[28.1712,112.985],[28.171382,113.000439]]};
+const P = {
+  south:[28.147093,113.065510], hotel:[28.171382,113.000439], orange:[28.196505,112.963081],
+  yuelu:[28.183601,112.936104], aiwan:[28.180437,112.937564], shuyuan:[28.180397,112.940805],
+  huda:[28.177932,112.945185], beimen:[28.208652,112.978849], yuwan:[28.168563,112.944088],
+  museum:[28.211876,112.993499], lieshi:[28.209521,112.996432],
+  wuyi:[28.196500,112.977340], ifs:[28.192460,112.978724], huangxing:[28.188459,112.976424],
+  taiping:[28.193573,112.972071], dufu:[28.184442,112.968624], tanzong:[28.189825,112.975324]
+};
+const PLACES = {
+  south:     { ll:P.south,     n:1,  name:'长沙南' },
+  hotel:     { ll:P.hotel,     n:2,  name:'酒店' },
+  orange:    { ll:P.orange,    n:3,  name:'橘子洲' },
+  yuelu:     { ll:P.yuelu,     n:4,  name:'岳麓山' },
+  aiwan:     { ll:P.aiwan,     n:5,  name:'爱晚亭' },
+  shuyuan:   { ll:P.shuyuan,   n:6,  name:'岳麓书院' },
+  huda:      { ll:P.huda,      n:7,  name:'湖南大学' },
+  beimen:    { ll:P.beimen,    n:'午', name:'北门饭店' },
+  yuwan:     { ll:P.yuwan,     n:'晚', name:'渔湾码头' },
+  museum:    { ll:P.museum,    n:8,  name:'省博' },
+  lieshi:    { ll:P.lieshi,    n:9,  name:'烈士公园' },
+  wuyi:      { ll:P.wuyi,      n:10, name:'五一广场' },
+  ifs:       { ll:P.ifs,       n:11, name:'IFS' },
+  huangxing: { ll:P.huangxing, n:12, name:'黄兴步行街' },
+  taiping:   { ll:P.taiping,   n:13, name:'太平老街' },
+  dufu:      { ll:P.dufu,      n:14, name:'杜甫江阁' },
+  tanzong:   { ll:P.tanzong,   n:'饭', name:'坛宗' }
+};
+const LEG_ENDS = {
+  d1_1:['south','hotel'], d1_lunch:['hotel','beimen'], d1_2:['beimen','orange'], d1_3:['orange','yuelu'],
+  d1_mtn:['aiwan','huda'], d1_4:['huda','yuwan'], d1_5:['yuwan','hotel'],
+  d2_1:['hotel','museum'], d2_walk:['museum','lieshi'], d2_2:['museum','ifs'],
+  d2_3:['taiping','dufu'], d2_4:['ifs','hotel'],
+  d3_1:['hotel','south']
+};
+function addBasemap(m) {
+  const layers = [
+    L.tileLayer(
+      'https://wprd0{s}.is.autonavi.com/appmaptile?x={x}&y={y}&z={z}&lang=zh_cn&size=1&scl=1&style=7',
+      { maxZoom:18, subdomains:['1','2','3','4'], attribution:'&copy; 高德' }
+    ),
+    L.tileLayer(
+      'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x={x}&y={y}&z={z}',
+      { maxZoom:18, subdomains:['1','2','3','4'], attribution:'&copy; 高德' }
+    ),
+    L.tileLayer(
+      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      { maxZoom:18, attribution:'&copy; OSM' }
+    )
+  ];
+  let idx = 0;
+  let fails = 0;
+  const arm = (layer) => {
+    layer.on('tileerror', () => {
+      fails++;
+      if (fails < 4) return;
+      fails = 0;
+      if (idx >= layers.length - 1) return;
+      m.removeLayer(layer);
+      idx++;
+      const next = layers[idx];
+      arm(next);
+      next.addTo(m);
+    });
+  };
+  arm(layers[0]);
+  layers[0].addTo(m);
+}
+function makeMap(el) {
+  const m = L.map(el, { scrollWheelZoom:false, attributionControl:false });
+  addBasemap(m);
+  return m;
+}
+function pinIcon(num, color) {
+  return L.divIcon({
+    className:'map-pin',
+    html:`<div class="pin-badge" style="background:${color||'#0f766e'}">${num}</div>`,
+    iconSize:[22,22], iconAnchor:[11,11], tooltipAnchor:[0,-14]
+  });
+}
+function addPlace(map, key, color) {
+  const p = PLACES[key];
+  if (!p) return;
+  L.marker(p.ll, { icon:pinIcon(p.n, color), zIndexOffset:600 })
+    .addTo(map)
+    .bindTooltip(p.name, { permanent:true, direction:'top', offset:[0,-12], className:'map-label', opacity:0.95 });
+}
+function addPlaces(map, keys, color) { keys.forEach(k => addPlace(map, k, color)); }
+function drawPoly(map, latlngs, color, markEnds) {
+  if(!latlngs||!latlngs.length) return;
+  L.polyline(latlngs,{color,weight:5,opacity:0.9}).addTo(map);
+  if (markEnds !== false) {
+    L.circleMarker(latlngs[0],{radius:7,color:'#fff',weight:2,fillColor:color,fillOpacity:1}).addTo(map);
+    L.circleMarker(latlngs[latlngs.length-1],{radius:7,color:'#fff',weight:2,fillColor:color,fillOpacity:1}).addTo(map);
+  }
+  map.fitBounds(L.latLngBounds(latlngs).pad(0.2));
+  setTimeout(()=>map.invalidateSize(),60);
+}
+function drawLeg(id, color) {
+  const key = id.replace('leg-','');
+  const m = makeMap(id);
+  drawPoly(m, LEGS[key], color, false);
+  const ends = LEG_ENDS[key] || [];
+  ends.forEach(k => addPlace(m, k, color));
+  if (ends.length) {
+    m.fitBounds(L.latLngBounds(ends.map(k => PLACES[k].ll)).pad(0.25));
+  }
+  setTimeout(() => m.invalidateSize(), 60);
+}
+const ov = makeMap('routeMap');
+[['d1_1','d1_lunch','d1_2','d1_3','d1_mtn','d1_4','d1_5','#2563eb'],['d2_1','d2_walk','d2_2','d2_3','d2_4','#dc2626'],['d3_1','#16a34a']].forEach(g=>{
+  const c=g[g.length-1];
+  g.slice(0,-1).forEach(k => drawPoly(ov, LEGS[k], c, false));
+});
+const OV_KEYS = ['south','hotel','beimen','orange','yuelu','aiwan','shuyuan','huda','yuwan','museum','lieshi','wuyi','ifs','huangxing','taiping','dufu'];
+addPlaces(ov, OV_KEYS, '#0f766e');
+ov.fitBounds(L.latLngBounds(OV_KEYS.map(k => P[k])).pad(0.12));
+setTimeout(()=>ov.invalidateSize(),60);
+
+const m1 = makeMap('map-day1');
+['d1_1','d1_lunch','d1_2','d1_3','d1_mtn','d1_4','d1_5'].forEach(k => drawPoly(m1, LEGS[k], '#2563eb', false));
+const D1_KEYS = ['south','hotel','beimen','orange','yuelu','aiwan','shuyuan','huda','yuwan'];
+addPlaces(m1, D1_KEYS, '#2563eb');
+m1.fitBounds(L.latLngBounds(D1_KEYS.map(k => P[k])).pad(0.15));
+setTimeout(()=>m1.invalidateSize(),60);
+
+const m2 = makeMap('map-day2');
+['d2_1','d2_walk','d2_2','d2_3','d2_4'].forEach(k => drawPoly(m2, LEGS[k], '#dc2626', false));
+const D2_KEYS = ['hotel','museum','lieshi','wuyi','ifs','huangxing','taiping','dufu'];
+addPlaces(m2, D2_KEYS, '#dc2626');
+m2.fitBounds(L.latLngBounds(D2_KEYS.map(k => P[k])).pad(0.15));
+setTimeout(()=>m2.invalidateSize(),60);
+
+const m3 = makeMap('map-day3');
+drawPoly(m3, LEGS.d3_1, '#16a34a', false);
+addPlaces(m3, ['hotel','south'], '#16a34a');
+m3.fitBounds(L.latLngBounds([P.hotel,P.south]).pad(0.2));
+setTimeout(()=>m3.invalidateSize(),60);
+
+['d1_1','d1_lunch','d1_2','d1_3','d1_mtn','d1_4','d1_5'].forEach(k => drawLeg('leg-'+k, '#2563eb'));
+['d2_1','d2_walk','d2_2','d2_3','d2_4'].forEach(k => drawLeg('leg-'+k, '#dc2626'));
+drawLeg('leg-d3_1', '#16a34a');
+</script>
+</body>
+</html>
